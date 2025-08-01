@@ -14,7 +14,7 @@ import (
 const gap = "\n\n"
 
 func main() {
-	p := tea.NewProgram(initialModel())
+	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("ERROR: %v", err)
 		log.Fatal(err)
@@ -29,6 +29,7 @@ type model struct {
 	viewport    viewport.Model
 	messages    []string
 	rolls       []string
+	rollsIndex  int
 	textarea    textarea.Model
 	senderStyle lipgloss.Style
 	err         error
@@ -36,14 +37,14 @@ type model struct {
 
 func initialModel() model {
 	ta := textarea.New()
-	ta.Placeholder = "Rollem"
+	ta.Placeholder = "Rollem if ya gottem"
 	ta.Focus()
 
-	ta.Prompt = "| "
+	ta.Prompt = "> "
 	ta.CharLimit = 280
 
 	ta.SetWidth(30)
-	ta.SetHeight(3)
+	ta.SetHeight(1)
 
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 
@@ -92,6 +93,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 		case tea.KeyEnter:
+			m.rollsIndex = len(m.rolls) - 1
 			userInput := m.textarea.Value()
 			if userInput != "" {
 				result, err := RollDiceString(userInput)
@@ -100,10 +102,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				m.messages = append(m.messages, m.senderStyle.Render(userInput)+": "+result)
+				m.rolls = append(m.rolls, userInput)
 				m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
 				m.textarea.Reset()
 				m.viewport.GotoBottom()
 			}
+		case tea.KeyUp:
+			if len(m.rolls) == 0 {
+				return m, nil
+			}
+			m.rollsIndex--
+			if m.rollsIndex == 0 {
+				m.rollsIndex = len(m.rolls) - 1
+			}
+			m.textarea.Reset()
+			m.textarea.SetValue(m.rolls[m.rollsIndex])
+		case tea.KeyDown:
+			if len(m.rolls) == 0 {
+				return m, nil
+			}
+			m.rollsIndex++
+			if m.rollsIndex == len(m.rolls) {
+				m.rollsIndex = 0
+			} else {
+				m.rollsIndex++
+			}
+			m.textarea.Reset()
+			m.textarea.SetValue(m.rolls[m.rollsIndex])
 		}
 
 	case errMsg:
@@ -129,5 +154,11 @@ func RollDiceString(userInput string) (string, error) {
 		return "", err
 	}
 	result := dice.Roll()
-	return fmt.Sprintf("%d", result), nil
+	resultStr := fmt.Sprintf("%d", result[0])
+	if len(result) > 1 {
+		for i := 1; i < len(result); i++ {
+			resultStr = fmt.Sprintf("%s %d", resultStr, result[i])
+		}
+	}
+	return resultStr, nil
 }
