@@ -16,15 +16,50 @@ type DiceRoll struct {
 	Modifier int
 }
 
+type RollResult struct {
+	Total       int
+	HasCritFail bool
+	HasCritSucc bool
+}
+
+func (r RollResult) CritStatus() string {
+	if r.HasCritFail && r.HasCritSucc {
+		return "both"
+	} else if r.HasCritSucc {
+		return "success"
+	} else if r.HasCritFail {
+		return "fail"
+	} else {
+		return "normal"
+	}
+}
+
 // Roll executes the dice roll and returns the result
-func (d DiceRoll) Roll() []int {
-	rollList := []int{}
+// Tracks crit failure and crit success for later formatting
+func (d DiceRoll) Roll() []RollResult {
+	rollList := []RollResult{}
 	for range d.NumRolls {
 		total := 0
+		hasCritFail := false
+		hasCritSucc := false
+
 		for range d.NumDice {
-			total += rand.IntN(d.Sides) + 1
+			dieResult := rand.IntN(d.Sides) + 1
+			total += dieResult
+
+			if dieResult == 1 {
+				hasCritFail = true
+			}
+
+			if dieResult == d.Sides {
+				hasCritSucc = true
+			}
 		}
-		rollList = append(rollList, total+d.Modifier)
+		rollList = append(rollList, RollResult{
+			Total:       total + d.Modifier,
+			HasCritFail: hasCritFail,
+			HasCritSucc: hasCritSucc,
+		})
 	}
 	return rollList
 }

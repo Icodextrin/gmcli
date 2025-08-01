@@ -26,18 +26,21 @@ type (
 )
 
 type model struct {
-	viewport    viewport.Model
-	messages    []string
-	rolls       []string
-	rollsIndex  int
-	textarea    textarea.Model
-	senderStyle lipgloss.Style
-	err         error
+	viewport         viewport.Model
+	messages         []string
+	rolls            []string
+	rollsIndex       int
+	textarea         textarea.Model
+	senderStyle      lipgloss.Style
+	critSuccessStyle lipgloss.Style
+	critFailStyle    lipgloss.Style
+	critBothStyle    lipgloss.Style
+	err              error
 }
 
 func initialModel() model {
 	ta := textarea.New()
-	ta.Placeholder = "Rollem if ya gottem"
+	ta.Placeholder = "<total num of rolls>#<num of dice>d<num of sides>[+,-]<mod>"
 	ta.Focus()
 
 	ta.Prompt = "> "
@@ -56,11 +59,14 @@ func initialModel() model {
 	ta.KeyMap.InsertNewline.SetEnabled(false)
 
 	return model{
-		textarea:    ta,
-		messages:    []string{},
-		viewport:    vp,
-		senderStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
-		err:         nil,
+		textarea:         ta,
+		messages:         []string{},
+		viewport:         vp,
+		senderStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
+		critSuccessStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		critFailStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+		critBothStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		err:              nil,
 	}
 }
 
@@ -93,10 +99,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			m.rollsIndex = len(m.rolls) - 1
 			userInput := m.textarea.Value()
 			if userInput != "" {
-				result, err := RollDiceString(userInput)
+				result, err := m.RollDiceString(userInput)
 				if err != nil {
 					return m, nil
 				}
@@ -106,26 +111,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
 				m.textarea.Reset()
 				m.viewport.GotoBottom()
+				m.rollsIndex = len(m.rolls)
 			}
 		case tea.KeyUp:
 			if len(m.rolls) == 0 {
 				return m, nil
 			}
 			m.rollsIndex--
-			if m.rollsIndex == 0 {
+			if m.rollsIndex < 0 {
 				m.rollsIndex = len(m.rolls) - 1
 			}
 			m.textarea.Reset()
 			m.textarea.SetValue(m.rolls[m.rollsIndex])
 		case tea.KeyDown:
-			if len(m.rolls) == 0 {
+			if len(m.rolls) == 0 || m.rollsIndex == len(m.rolls) {
 				return m, nil
 			}
 			m.rollsIndex++
 			if m.rollsIndex == len(m.rolls) {
 				m.rollsIndex = 0
-			} else {
-				m.rollsIndex++
 			}
 			m.textarea.Reset()
 			m.textarea.SetValue(m.rolls[m.rollsIndex])
@@ -148,17 +152,28 @@ func (m model) View() string {
 	)
 }
 
-func RollDiceString(userInput string) (string, error) {
+func (m model) RollDiceString(userInput string) (string, error) {
 	dice, err := ParseDiceString(userInput)
 	if err != nil {
 		return "", err
 	}
-	result := dice.Roll()
-	resultStr := fmt.Sprintf("%d", result[0])
-	if len(result) > 1 {
-		for i := 1; i < len(result); i++ {
-			resultStr = fmt.Sprintf("%s %d", resultStr, result[i])
+	results := dice.Roll()
+
+	var styledResults []string
+
+	for _, result := range results {
+		resultStr := fmt.Sprintf("%d", result.Total)
+
+		switch result.CritStatus() {
+		case "success":
+			resultStr = m.critSuccessStyle.Render(resultStr)
+		case "fail":
+			resultStr = m.critFailStyle.Render(resultStr)
+		case "both":
+			resultStr = m.critBothStyle.Render(resultStr)
 		}
+		styledResults = append(styledResults, resultStr)
 	}
-	return resultStr, nil
+
+	return strings.Join(styledResults, " "), nil
 }
