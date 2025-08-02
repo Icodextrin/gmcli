@@ -5,6 +5,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,6 +27,47 @@ type (
 	errMsg error
 )
 
+type keyMap struct {
+	Up    key.Binding
+	Down  key.Binding
+	Enter key.Binding
+	Help  key.Binding
+	Quit  key.Binding
+}
+
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Help, k.Quit}
+}
+
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Enter, k.Help, k.Quit},
+	}
+}
+
+var keys = keyMap{
+	Up: key.NewBinding(
+		key.WithKeys("up"),
+		key.WithHelp("↑", "prev roll"),
+	),
+	Down: key.NewBinding(
+		key.WithKeys("down"),
+		key.WithHelp("↓", "next roll"),
+	),
+	Enter: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "roll"),
+	),
+	Help: key.NewBinding(
+		key.WithKeys("?"),
+		key.WithHelp("?", "toggle help"),
+	),
+	Quit: key.NewBinding(
+		key.WithKeys("q", "esc", "ctrl+c"),
+		key.WithHelp("q", "quit"),
+	),
+}
+
 type model struct {
 	viewport         viewport.Model
 	messages         []string
@@ -35,12 +78,16 @@ type model struct {
 	critSuccessStyle lipgloss.Style
 	critFailStyle    lipgloss.Style
 	critBothStyle    lipgloss.Style
+	helpStyle        lipgloss.Style
+	keys             keyMap
+	help             help.Model
+	quitting         bool
 	err              error
 }
 
 func initialModel() model {
 	ta := textarea.New()
-	ta.Placeholder = "<total num of rolls>#<num of dice>d<num of sides>[+,-]<mod>"
+	ta.Placeholder = "<total num of rolls>#<num dice>d<num sides>[+,-]<modifier>"
 	ta.Focus()
 
 	ta.Prompt = "> "
@@ -54,7 +101,7 @@ func initialModel() model {
 	ta.ShowLineNumbers = false
 
 	vp := viewport.New(30, 5)
-	vp.SetContent(`Roll dice in the format ndn+-n, enter to roll`)
+	vp.SetContent(`Rollem if you gottem...`)
 
 	ta.KeyMap.InsertNewline.SetEnabled(false)
 
@@ -62,6 +109,9 @@ func initialModel() model {
 		textarea:         ta,
 		messages:         []string{},
 		viewport:         vp,
+		keys:             keys,
+		help:             help.New(),
+		helpStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("#FF75B7")),
 		senderStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
 		critSuccessStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		critFailStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
@@ -88,6 +138,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = msg.Width
 		m.textarea.SetWidth(msg.Width)
 		m.viewport.Height = msg.Height - m.textarea.Height() - lipgloss.Height(gap)
+		m.help.Width = msg.Width
 
 		if len(m.messages) > 0 {
 			m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
@@ -95,10 +146,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		switch {
+		case key.Matches(msg, m.keys.Quit):
+			m.quitting = true
 			return m, tea.Quit
-		case tea.KeyEnter:
+		case key.Matches(msg, m.keys.Enter):
 			userInput := m.textarea.Value()
 			if userInput != "" {
 				result, err := m.RollDiceString(userInput)
@@ -113,7 +165,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewport.GotoBottom()
 				m.rollsIndex = len(m.rolls)
 			}
-		case tea.KeyUp:
+		case key.Matches(msg, m.keys.Up):
 			if len(m.rolls) == 0 {
 				return m, nil
 			}
@@ -123,7 +175,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.textarea.Reset()
 			m.textarea.SetValue(m.rolls[m.rollsIndex])
-		case tea.KeyDown:
+		case key.Matches(msg, m.keys.Down):
 			if len(m.rolls) == 0 || m.rollsIndex == len(m.rolls) {
 				return m, nil
 			}
@@ -133,6 +185,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.textarea.Reset()
 			m.textarea.SetValue(m.rolls[m.rollsIndex])
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
 		}
 
 	case errMsg:
@@ -144,11 +198,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	if m.quitting {
+		return "Bye!\n"
+	}
+
+	helpView := m.help.View(m.keys)
+
 	return fmt.Sprintf(
-		"%s%s%s",
+		"%s%s%s%s%s",
 		m.viewport.View(),
 		gap,
 		m.textarea.View(),
+		gap,
+		helpView,
 	)
 }
 
