@@ -5,19 +5,19 @@ import (
 	"log"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 const gap = "\n\n"
 
 func main() {
 	m := NewDiceRollerModel(0, 0)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("ERROR: %v", err)
 		log.Fatal(err)
@@ -97,11 +97,16 @@ func NewDiceRollerModel(width, height int) DiceRollerModel {
 	ta.SetWidth(30)
 	ta.SetHeight(1)
 
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	taStyles := ta.Styles()
+	taStyles.Focused.CursorLine = lipgloss.NewStyle()
+	ta.SetStyles(taStyles)
 
 	ta.ShowLineNumbers = false
 
-	vp := viewport.New(30, 5)
+	vp := viewport.New(
+		viewport.WithWidth(30),
+		viewport.WithHeight(5),
+	)
 	vp.SetContent(`Rollem if you gottem...`)
 
 	ta.KeyMap.InsertNewline.SetEnabled(false)
@@ -139,17 +144,17 @@ func (m DiceRollerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.viewport.Width = msg.Width
+		m.viewport.SetWidth(msg.Width)
 		m.textarea.SetWidth(msg.Width)
-		m.viewport.Height = msg.Height - m.textarea.Height() - lipgloss.Height(gap)
-		m.help.Width = msg.Width
+		m.viewport.SetHeight(msg.Height - m.textarea.Height() - lipgloss.Height(gap))
+		m.help.SetWidth(msg.Width)
 
 		if len(m.messages) > 0 {
-			m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
+			m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width()).Render(strings.Join(m.messages, "\n")))
 		}
 		m.viewport.GotoBottom()
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
@@ -163,7 +168,7 @@ func (m DiceRollerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				m.messages = append(m.messages, m.rollStyle.Render(userInput)+": "+result)
 				m.rolls = append(m.rolls, userInput)
-				m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
+				m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width()).Render(strings.Join(m.messages, "\n")))
 				m.textarea.Reset()
 				m.viewport.GotoBottom()
 				m.rollsIndex = len(m.rolls)
@@ -200,17 +205,19 @@ func (m DiceRollerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 
-func (m DiceRollerModel) View() string {
+func (m DiceRollerModel) View() tea.View {
 	helpView := m.help.View(m.keys)
 
-	return fmt.Sprintf(
+	view := tea.NewView(fmt.Sprintf(
 		"%s%s%s%s%s",
 		m.viewport.View(),
 		gap,
 		m.textarea.View(),
 		gap,
 		helpView,
-	)
+	))
+	view.AltScreen = true
+	return view
 }
 
 func (m DiceRollerModel) RollDiceString(userInput string) (string, error) {
