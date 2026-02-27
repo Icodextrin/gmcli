@@ -16,7 +16,8 @@ import (
 const gap = "\n\n"
 
 func main() {
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+	m := NewDiceRollerModel(0, 0)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("ERROR: %v", err)
 		log.Fatal(err)
@@ -68,24 +69,24 @@ var keys = keyMap{
 	),
 }
 
-type model struct {
+type DiceRollerModel struct {
 	viewport         viewport.Model
 	messages         []string
 	rolls            []string
 	rollsIndex       int
 	textarea         textarea.Model
-	senderStyle      lipgloss.Style
+	rollStyle        lipgloss.Style
 	critSuccessStyle lipgloss.Style
 	critFailStyle    lipgloss.Style
 	critBothStyle    lipgloss.Style
 	helpStyle        lipgloss.Style
 	keys             keyMap
 	help             help.Model
-	quitting         bool
+	focused          bool
 	err              error
 }
 
-func initialModel() model {
+func NewDiceRollerModel(width, height int) DiceRollerModel {
 	ta := textarea.New()
 	ta.Placeholder = "<total num of rolls>#<num dice>d<num sides>[+,-]<modifier>"
 	ta.Focus()
@@ -105,26 +106,29 @@ func initialModel() model {
 
 	ta.KeyMap.InsertNewline.SetEnabled(false)
 
-	return model{
+	return DiceRollerModel{
 		textarea:         ta,
 		messages:         []string{},
 		viewport:         vp,
 		keys:             keys,
 		help:             help.New(),
 		helpStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("#FF75B7")),
-		senderStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
+		rollStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
 		critSuccessStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		critFailStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
 		critBothStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
-		err:              nil,
+		focused:          true,
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m DiceRollerModel) Init() tea.Cmd {
 	return textarea.Blink
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m DiceRollerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if !m.focused {
+		return m, nil
+	}
 	var (
 		tiCmd tea.Cmd
 		vpCmd tea.Cmd
@@ -148,7 +152,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
-			m.quitting = true
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Enter):
 			userInput := m.textarea.Value()
@@ -158,7 +161,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-				m.messages = append(m.messages, m.senderStyle.Render(userInput)+": "+result)
+				m.messages = append(m.messages, m.rollStyle.Render(userInput)+": "+result)
 				m.rolls = append(m.rolls, userInput)
 				m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
 				m.textarea.Reset()
@@ -197,11 +200,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 
-func (m model) View() string {
-	if m.quitting {
-		return "Bye!\n"
-	}
-
+func (m DiceRollerModel) View() string {
 	helpView := m.help.View(m.keys)
 
 	return fmt.Sprintf(
@@ -214,7 +213,7 @@ func (m model) View() string {
 	)
 }
 
-func (m model) RollDiceString(userInput string) (string, error) {
+func (m DiceRollerModel) RollDiceString(userInput string) (string, error) {
 	dice, err := ParseDiceString(userInput)
 	if err != nil {
 		return "", err
