@@ -2,7 +2,7 @@
 
 `gmcli` is a terminal app for running tabletop RPG sessions, built with Go and the Bubble Tea TUI framework.
 
-The app now uses a modular shell architecture:
+The app uses a modular shell architecture:
 
 - an app-level shell model handles global layout, focus, and module navigation
 - each feature lives in its own module package behind a shared interface
@@ -36,7 +36,7 @@ Examples:
 - `d20`
 - `2d6+3`
 - `4d8-1`
-- `3#1d20+5` (roll one d20+5 three times)
+- `3#2d20+5` (roll two d20+5 three times)
 
 Defaults:
 
