@@ -78,7 +78,8 @@ Dice module local keys:
 └── docs/
     ├── ARCHITECTURE.md
     ├── MODULE_INTERFACE.md
-    └── IMPLEMENTING_MODULES.md
+    ├── IMPLEMENTING_MODULES.md
+    └── TESTING.md
 ```
 
 ## Module Contract
@@ -131,3 +132,4 @@ go build -o gmcli .
 - [Architecture](docs/ARCHITECTURE.md)
 - [Module Interface](docs/MODULE_INTERFACE.md)
 - [Implementing Modules](docs/IMPLEMENTING_MODULES.md)
+- [Testing](docs/TESTING.md)
