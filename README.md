@@ -2,9 +2,19 @@
 
 `gmcli` is a terminal app for running tabletop RPG sessions, built with Go and the Bubble Tea TUI framework.
 
-Right now the implemented module is a dice roller with roll history, critical result highlighting, and keyboard-driven interaction.
+The app uses a modular shell architecture:
 
-## What It Does
+- an app-level shell model handles global layout, focus, and module navigation
+- each feature lives in its own module package behind a shared interface
+- pure game logic is split into domain packages separate from TUI code
+
+## Current Modules
+
+- `Dice`: implemented, with history and crit highlighting
+- `Initiative`: placeholder module
+- `Names`: placeholder module
+
+## What Dice Does
 
 - Parses dice notation from the input prompt.
 - Rolls one or more dice expressions.
@@ -26,7 +36,7 @@ Examples:
 - `d20`
 - `2d6+3`
 - `4d8-1`
-- `3#1d20+5` (roll one d20+5 three times)
+- `3#2d20+5` (roll two d20+5 three times)
 
 Defaults:
 
@@ -36,16 +46,61 @@ Defaults:
 
 ## Keyboard Controls
 
+- `tab`: next module
+- `shift+tab`: previous module
+- `?`: toggle help
+- `q`, `esc`, `ctrl+c`: quit
+
+Dice module local keys:
+
 - `enter`: roll current expression
 - `up`: previous expression from history
 - `down`: next expression from history
-- `?`: toggle help display
-- `q`, `esc`, `ctrl+c`: quit
 
 ## Project Structure
 
-- `main.go`: Bubble Tea app model, input handling, viewport rendering, keybindings.
-- `diceRoller.go`: dice parsing and roll logic.
+```text
+.
+├── main.go                      # convenience entrypoint
+├── cmd/gmcli/main.go            # command entrypoint
+├── internal/
+│   ├── app/
+│   │   ├── model.go             # shell model/router/layout
+│   │   └── messages.go          # shared app-level messages
+│   ├── module/
+│   │   └── module.go            # shared Module interface
+│   ├── domain/
+│   │   └── dice/                # pure dice parsing/rolling logic
+│   └── modules/
+│       ├── dice/                # dice UI module
+│       ├── initiative/          # placeholder module
+│       └── names/               # placeholder module
+└── docs/
+    ├── ARCHITECTURE.md
+    ├── MODULE_INTERFACE.md
+    ├── IMPLEMENTING_MODULES.md
+    └── TESTING.md
+```
+
+## Module Contract
+
+All modules implement `internal/module.Module` so the shell can route messages and render any module consistently.
+
+```go
+type Module interface {
+    ID() ID
+    Title() string
+    Init() tea.Cmd
+    Update(tea.Msg) (Module, tea.Cmd)
+    View() tea.View
+    SetSize(width, height int)
+    SetFocus(focused bool)
+    ShortHelp() []key.Binding
+    FullHelp() [][]key.Binding
+}
+```
+
+See detailed docs in [docs/MODULE_INTERFACE.md](docs/MODULE_INTERFACE.md).
 
 ## Tech Stack
 
@@ -60,12 +115,21 @@ Defaults:
 go run .
 ```
 
+Or:
+
+```bash
+go run ./cmd/gmcli
+```
+
 ## Build
 
 ```bash
 go build -o gmcli .
 ```
 
-## Current Scope
+## Documentation
 
-This repository is currently focused on the dice roller workflow. Future game-master utilities can be added as additional modules within the same TUI.
+- [Architecture](docs/ARCHITECTURE.md)
+- [Module Interface](docs/MODULE_INTERFACE.md)
+- [Implementing Modules](docs/IMPLEMENTING_MODULES.md)
+- [Testing](docs/TESTING.md)
