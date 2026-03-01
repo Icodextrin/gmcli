@@ -2,10 +2,9 @@ package dice
 
 import (
 	"fmt"
-	"strings"
-
 	"gmcli/internal/domain/dice"
 	"gmcli/internal/module"
+	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
@@ -87,7 +86,7 @@ func (m *Model) ID() module.ID {
 }
 
 func (m *Model) Title() string {
-	return "Dice"
+	return "Dice Roller"
 }
 
 func (m *Model) Init() tea.Cmd {
