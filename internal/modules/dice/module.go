@@ -13,7 +13,10 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-const gap = "\n\n"
+const (
+	gap             = "\n\n"
+	placeholderText = "Rollem if you gottem..."
+)
 
 type keyMap struct {
 	Up    key.Binding
@@ -23,8 +26,8 @@ type keyMap struct {
 
 func newKeyMap() keyMap {
 	return keyMap{
-		Up:    key.NewBinding(key.WithKeys("up"), key.WithHelp("up", "prev expr")),
-		Down:  key.NewBinding(key.WithKeys("down"), key.WithHelp("down", "next expr")),
+		Up:    key.NewBinding(key.WithKeys("up"), key.WithHelp("up", "prev roll")),
+		Down:  key.NewBinding(key.WithKeys("down"), key.WithHelp("down", "next roll")),
 		Enter: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "roll")),
 	}
 }
@@ -44,6 +47,7 @@ type Model struct {
 	critSuccessStyle lipgloss.Style
 	critFailStyle    lipgloss.Style
 	critBothStyle    lipgloss.Style
+	placeholderStyle lipgloss.Style
 }
 
 var _ module.Module = (*Model)(nil)
@@ -67,7 +71,7 @@ func New() module.Module {
 		viewport.WithWidth(30),
 		viewport.WithHeight(5),
 	)
-	vp.SetContent("Rollem if you gottem...")
+	vp.SetContent(lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(placeholderText))
 
 	return &Model{
 		viewport:         vp,
@@ -78,6 +82,7 @@ func New() module.Module {
 		critSuccessStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		critFailStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
 		critBothStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+		placeholderStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 	}
 }
 
@@ -130,6 +135,12 @@ func (m *Model) Update(msg tea.Msg) (module.Module, tea.Cmd) {
 		case key.Matches(msg, m.keys.Enter):
 			userInput := strings.TrimSpace(m.input.Value())
 			if userInput == "" {
+				return m, tea.Batch(inCmd, vpCmd)
+			}
+
+			if strings.EqualFold(userInput, "clear") {
+				m.clearHistory()
+				m.input.Reset()
 				return m, tea.Batch(inCmd, vpCmd)
 			}
 
@@ -186,8 +197,14 @@ func (m *Model) FullHelp() [][]key.Binding {
 }
 
 func (m *Model) refreshViewport() {
+	base := lipgloss.NewStyle().Width(m.viewport.Width())
+	if len(m.messages) == 0 {
+		m.viewport.SetContent(base.Render(m.placeholderStyle.Render(placeholderText)))
+		return
+	}
+
 	content := strings.Join(m.messages, "\n")
-	m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width()).Render(content))
+	m.viewport.SetContent(base.Render(content))
 }
 
 func (m *Model) rollDiceString(userInput string) (string, error) {
@@ -211,4 +228,11 @@ func (m *Model) rollDiceString(userInput string) (string, error) {
 		styledResults = append(styledResults, resultStr)
 	}
 	return strings.Join(styledResults, " "), nil
+}
+
+func (m *Model) clearHistory() {
+	m.messages = nil
+	m.rolls = nil
+	m.historyIx = 0
+	m.refreshViewport()
 }
